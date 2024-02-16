@@ -10,6 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@uploadcare/rest-client": "^6.14.0",
+    "@uploadcare/upload-client": "^6.14.0",
     "axios": "^1.6.5",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
