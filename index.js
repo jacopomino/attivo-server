@@ -661,3 +661,19 @@ app.put("/sendEmail", async (req,res)=>{
         });
     }
 })
+//aggiorna dati personale degli users
+app.put("/update", async (req,res)=>{
+    let info=req.body
+    if(info.daAggiornare.length===0){
+        res.status(203).send("Non hai modificato nessun parametro")
+    }
+    for(let aggiorno in info.daAggiornare){
+        client.db("palestra").collection("users").updateOne({_id:new ObjectId(info.id)},{$set:{[info.daAggiornare[aggiorno].tipo]:info.daAggiornare[aggiorno].valore}}).then(e=>{
+            if(!e){
+                res.status(203).send("Qualcosa è andato storto")
+            }else{
+                if(aggiorno===4)res.send("ok")
+            }
+        })
+    }
+})
