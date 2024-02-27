@@ -10,8 +10,6 @@ import { uploadFile } from "@uploadcare/upload-client"
 import {deleteFile,UploadcareSimpleAuthSchema} from '@uploadcare/rest-client';
 import nodemailer from "nodemailer"
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT|| 3001;
 const app=express()
 app.use(cors())
@@ -21,43 +19,8 @@ app.listen(PORT,()=>{
     console.log("run");
 })
 
-//per le immagini
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
-const fileFilter = (req, file, cb) => {
-    if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png') {
-        cb(null, true);
-    } else {
-        cb(null, false);
-    }
-}
-const upload = multer({ storage: storage, fileFilter: fileFilter });
-//per i video
-const storageVideo = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
-const fileFilterVideo = (req, file, cb) => {
-    if (file.mimetype === 'video/mp4') {
-        cb(null, true);
-    } else {
-        cb(null, false);
-    }
-}
-
-const uploadVideo = multer({storage: storageVideo,fileFilter: fileFilterVideo});
 const client=new MongoClient("mongodb://apo:jac2001min@cluster0-shard-00-00.pdunp.mongodb.net:27017,cluster0-shard-00-01.pdunp.mongodb.net:27017,cluster0-shard-00-02.pdunp.mongodb.net:27017/?ssl=true&replicaSet=atlas-me2tz8-shard-0&authSource=admin&retryWrites=true&w=majority")
-const respone=async()=>{
+/*const respone=async()=>{
     try{
         let esercizi=[]
         await client.db("palestra").collection("esercizi").find({}).toArray().then(e=>{
@@ -68,7 +31,7 @@ const respone=async()=>{
         console.error(error);
     }
 }
-/*
+
 //////////////USERS//////////////
 //leggi tutti gli users
 app.get("/users", async (req,res)=>{
@@ -483,6 +446,85 @@ app.put('/cercaVideo',function (req, res) {
     })
 })
 */
+//registrati
+app.put("/signup", async (req,res)=>{
+    let info=req.body
+    let countError=0
+    let error="you have not filled in the field: "
+    if(info.email===""){
+        countError++
+        error=error+"email, "
+    }
+    if(info.password===""){
+        countError++
+        error=error+"password, "
+    }
+    if(info.eta===""){
+        countError++
+        error=error+"age, "
+    }
+    if(info.sesso===""){
+        countError++
+        error=error+"gender, "
+    }
+    if(info.impianto===""){
+        countError++
+        error=error+"sports facilitie, "
+    }
+    if(countError>0){
+        res.status(203).send(error)
+    }
+    else{
+        client.db("palestra").collection("users").findOne({password:info.password,email:info.email}).then(e=>{
+            if(!e){
+                info["_id"]=new ObjectId()
+                info.altezza=[info.altezza]
+                info.peso=[info.peso]
+                client.db("palestra").collection("users").insertOne(info).then((e)=>{
+                    res.status(200).send(JSON.stringify(info["_id"]))
+                })
+            }else{
+                res.status(203).send("Already existing user")
+            }
+        })
+    }
+})
+//accedi
+app.put("/login", async (req,res)=>{
+    let info=req.body
+    let countError=0
+    let error="you have not filled in the field: "
+    if(info.email===""){
+        countError++
+        error=error+"email, "
+    }
+    if(info.password===""){
+        countError++
+        error=error+"password, "
+    }
+    if(countError>0){
+        res.status(203).send(error)
+    }else{
+        client.db("palestra").collection("users").findOne({password:info.password,email:info.email}).then(e=>{
+            if(!e){
+                res.status(203).send("User does not exist, Register!")
+            }else{
+                res.status(200).send(e._id)
+            }
+        })
+    }
+})
+//cerca users in base _id e rimango loggato
+app.put("/stayLoggedIn", async (req,res)=>{
+    let info=req.body
+    client.db("palestra").collection("users").findOne({_id:new ObjectId(info._id)}).then(e=>{
+        if(!e){
+            res.status(203).send("Token non valido")
+        }else{
+            res.status(200).send(e)
+        }
+    })
+})
 //get tutti centri sportivi da mettere sulla mappa
 app.get("/getSportCenter", async (req,res)=>{
     client.db("palestra").collection("centriSportivo").find({}).toArray().then(e=>res.send(e))
@@ -509,9 +551,9 @@ app.post("/addSportCenter", async (req,res)=>{
             error="You can only insert images"
         }
     }
-    if(!info.utenteid){
+    if(info.utenteid==="undefined"){
         countError++
-        error="Something went wrong, try again!"
+        error="you are not logged in"
     }
     if(countError>0){
         res.status(203).send(error)
@@ -524,6 +566,7 @@ app.post("/addSportCenter", async (req,res)=>{
             }).then(e=>{
                 if(e){
                     info.coordinate=JSON.parse(info.coordinate)
+                    info.utenteid=JSON.parse(info.utenteid)._id
                     info.src="https://ucarecdn.com/"+e.uuid+"/-/resize/1200x/-/quality/smart/-/format/auto/"+filename
                     client.db("palestra").collection("centriSportivo").insertOne(info).then((e)=>{
                         res.status(200).send("ok")
@@ -534,6 +577,7 @@ app.post("/addSportCenter", async (req,res)=>{
             })
         }else{
             info.coordinate=JSON.parse(info.coordinate)
+            info.utenteid=JSON.parse(info.utenteid)._id
             client.db("palestra").collection("centriSportivo").insertOne(info).then((e)=>{
                 res.status(200).send("ok")
             })
@@ -552,13 +596,20 @@ app.put("/addGiudizioCenter", async (req,res)=>{
     }else if(info.giudizio==="2"){
         tipo="brutto"
     }
-    client.db("palestra").collection("centriSportivo").updateOne({_id:new ObjectId(info.id)},{$push:{[tipo]:info.utenteId}}).then(e=>{
-        if(!e){
-            res.status(203).send("Something went wrong, try again!")
-        }else{
-            res.status(200).send("ok")
-        }
-    })
+    if(info.utenteid==="undefined"){
+        error="you are not logged in"
+        res.status(203).send(error)
+    }else{
+        info.utenteid=JSON.parse(info.utenteid)._id
+        client.db("palestra").collection("centriSportivo").updateOne({_id:new ObjectId(info.id)},{$push:{[tipo]:info.utenteId}}).then(e=>{
+            if(!e){
+                res.status(203).send("Something went wrong, try again!")
+            }else{
+                res.status(200).send("ok")
+            }
+        })
+    }
+    
 })
 //manda richiesta per contattarci
 app.put("/sendEmail", async (req,res)=>{
