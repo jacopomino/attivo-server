@@ -2,8 +2,6 @@ import cors from "cors"
 import express from "express"
 import bodyParser from "body-parser"
 import {MongoClient,ObjectId} from "mongodb"
-import multer from "multer"
-import { fileURLToPath } from "url"
 import path from "path"
 import fileupload from "express-fileupload"
 import { uploadFile } from "@uploadcare/upload-client"
@@ -519,7 +517,7 @@ app.put("/stayLoggedIn", async (req,res)=>{
     let info=req.body
     client.db("palestra").collection("users").findOne({_id:new ObjectId(info._id)}).then(e=>{
         if(!e){
-            res.status(203).send("Token non valido")
+            res.status(203).send("User does not exist, Register!")
         }else{
             res.status(200).send(e)
         }
@@ -662,18 +660,23 @@ app.put("/sendEmail", async (req,res)=>{
     }
 })
 //aggiorna dati personale degli users
-app.put("/update", async (req,res)=>{
+app.post("/update", async (req,res)=>{
     let info=req.body
-    if(info.daAggiornare.length===0){
-        res.status(203).send("Non hai modificato nessun parametro")
-    }
-    for(let aggiorno in info.daAggiornare){
-        client.db("palestra").collection("users").updateOne({_id:new ObjectId(info.id)},{$set:{[info.daAggiornare[aggiorno].tipo]:info.daAggiornare[aggiorno].valore}}).then(e=>{
-            if(!e){
-                res.status(203).send("Qualcosa è andato storto")
+    client.db("palestra").collection("users").findOne({_id:new ObjectId(info.id)}).then(e=>{
+        if(e){
+            if(e.impianto===info.impianto&&e.sesso===info.sesso){
+                res.status(203).send("Non hai modificato nessun parametro")
             }else{
-                if(aggiorno===4)res.send("ok")
+                if(e.sesso!==info.sesso){
+                    client.db("palestra").collection("users").updateOne({_id:new ObjectId(info.id)},{$set:{sesso:info.sesso}})
+                }
+                if(e.impianto!==info.impianto){
+                    client.db("palestra").collection("users").updateOne({_id:new ObjectId(info.id)},{$set:{impianto:info.impianto}})
+                }
+                res.send("ok")
             }
-        })
-    }
+        }else{
+            res.status(203).send("User does not exist, Register!")
+        }
+    })
 })
