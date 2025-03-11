@@ -8,6 +8,8 @@ import { uploadFile } from "@uploadcare/upload-client"
 import {deleteFile,UploadcareSimpleAuthSchema} from '@uploadcare/rest-client';
 import nodemailer from "nodemailer"
 import axios from "axios"
+import cheerio from "cheerio"
+import puppeteer from "puppeteer"
 
 
 const PORT = process.env.PORT|| 3001;
@@ -153,14 +155,45 @@ app.put("/getBounds", async (req,res)=>{
     const API_KEY='FrbSqrAbcjqK5v7P5wsCQymKbGo6L655TmLSvMt329yAnyRCdTEiJIrI'
     const response2=await axios.get('https://api.pexels.com/v1/search', {headers: {Authorization: API_KEY},params:{query: info.filter,per_page: 10}})
     const response3=await axios.get('https://api.pexels.com/videos/search', {headers: {Authorization: API_KEY},params:{query: info.filter,per_page: 10}})
+    const response4=await searchGoogleShopping(info.filter);
     const dato={
         markers:markers,
         contenuto:contenuto,
         img:response2.data.photos,
-        video:response3.data.videos
+        video:response3.data.videos,
+        shopping:response4
     }
     res.send(dato)
 })
+async function searchGoogleShopping(query) {
+    try {
+        const url = `https://www.google.com/search?tbm=shop&hl=en&q=${encodeURIComponent(query)}`;
+        const { data } = await axios.get(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+        });
+        const $ = cheerio.load(data);
+        let products = [];
+        $('.sh-dgr__content').each((index, element) => {
+            const title = $(element).find('.tAxDx').text().trim();
+            const price = $(element).find('.a8Pemb').text().trim().replace(/[^\d,.]/g, '').replace(',', '.');
+            const store = $(element).find('.aULzUe').text().trim() || "Unknown Store"
+            const link = $(element).find('a').attr('href');
+            if (title && price) {
+                products.push({
+                    title,
+                    price,
+                    store: store,
+                    link: link ? `https://www.google.com${link}` : "N/A",
+                });
+            }
+        });
+        return (products);
+    } catch (error) {
+        console.error("Errore durante lo scraping:", error.message);
+    }
+}
 //get tutti centri sportivi da mettere sulla mappa
 app.get("/getSportCenter", async (req,res)=>{
     client.db("palestra").collection("centriSportivo").find({}).toArray().then(e=>res.send(e))
