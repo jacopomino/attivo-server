@@ -9,7 +9,6 @@ import {deleteFile,UploadcareSimpleAuthSchema} from '@uploadcare/rest-client';
 import nodemailer from "nodemailer"
 import axios from "axios"
 import cheerio from "cheerio"
-import puppeteer from "puppeteer"
 
 
 const PORT = process.env.PORT|| 3001;
