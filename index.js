@@ -143,7 +143,8 @@ app.put("/getBounds", async (req,res)=>{
         }
         try {
             const nominatimResponse = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${x2}&lon=${y2}`);
-            item.tags["name"] = nominatimResponse.data.name || item.tags.name || "Public";  
+            item.tags["name"] = item.tags.name || nominatimResponse.data.name || "Public";
+            item.tags["website"]=item.tags.website||nominatimResponse.data.website
         } catch (error) {
             console.error("Errore con Nominatim:", error.message);
             item.tags.name = "Public";
@@ -179,12 +180,20 @@ async function searchGoogleShopping(query) {
             const price = $(element).find('.a8Pemb').text().trim().replace(/[^\d,.]/g, '').replace(',', '.');
             const store = $(element).find('.aULzUe').text().trim() || "Unknown Store"
             const link = $(element).find('a').attr('href');
+            let directLink = "N/A";
+            $(element).find('a').each((i, el) => {
+                const href = $(el).attr('href');
+                if (href && href.includes('url=')) {
+                    directLink = decodeURIComponent(href.split('url=')[1].split('&')[0]);
+                }
+            });
             if (title && price) {
                 products.push({
                     title,
                     price,
                     store: store,
                     link: link ? `https://www.google.com${link}` : "N/A",
+                    directLink
                 });
             }
         });
