@@ -105,7 +105,6 @@ app.put("/stayLoggedIn", async (req,res)=>{
 app.put("/getBounds", async (req,res)=>{
     function isBBoxTooLarge(bbox, maxArea) { // maxArea = 1.0 ~ circa 100 km²
         let [minLat, minLon, maxLat, maxLon] = bbox;
-    
         let height = maxLat - minLat;
         let width = maxLon - minLon;
         let area = height * width; // Approssimazione dell'area in gradi quadrati
@@ -144,7 +143,7 @@ app.put("/getBounds", async (req,res)=>{
         try {
             const nominatimResponse = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${x2}&lon=${y2}`);
             item.tags["name"] = item.tags.name || nominatimResponse.data.name || "Public";
-            item.tags["website"]=item.tags.website||nominatimResponse.data.website
+            item.tags["website"]=item.tags.website||nominatimResponse.data.website||`https://www.google.com/search?q=${item.tags["name"]} ${nominatimResponse.data.address.postcode} `
         } catch (error) {
             console.error("Errore con Nominatim:", error.message);
             item.tags.name = "Public";
@@ -192,7 +191,7 @@ async function searchGoogleShopping(query) {
                     title,
                     price,
                     store: store,
-                    link: link ? `https://www.google.com${link}` : "N/A",
+                    link: link ? `https://www.google.com${link}`: "N/A",
                     directLink
                 });
             }
