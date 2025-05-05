@@ -115,10 +115,10 @@ app.put("/getBounds", async (req,res)=>{
         res.status(500).send("You have not entered the type of sport")
         return
     }
-    if (isBBoxTooLarge([info.latSw,info.lonSw,info.latNe,info.lonNe], 0.03)) {
+    /*if (isBBoxTooLarge([info.latSw,info.lonSw,info.latNe,info.lonNe], 0.03)) {
         res.status(500).send("Area too big")
         return
-    };
+    };*/
     const bbox=info.latSw+","+info.lonSw+","+info.latNe+","+info.lonNe
     const query = info.filter !== "skiing" ? `
         [out:json];
