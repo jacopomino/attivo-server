@@ -102,68 +102,115 @@ app.put("/stayLoggedIn", async (req,res)=>{
     })
 })
 //get tutti in centri sportivi visivamente sulla mappa
-app.put("/getBounds", async (req,res)=>{
-    function isBBoxTooLarge(bbox, maxArea) { // maxArea = 1.0 ~ circa 100 km²
-        let [minLat, minLon, maxLat, maxLon] = bbox;
-        let height = maxLat - minLat;
-        let width = maxLon - minLon;
-        let area = height * width; // Approssimazione dell'area in gradi quadrati
-        return area > maxArea;
-    }
-    const info=req.body
-    if(!info.filter){
-        res.status(500).send("You have not entered the type of sport")
-        return
-    }
-    /*if (isBBoxTooLarge([info.latSw,info.lonSw,info.latNe,info.lonNe], 0.03)) {
-        res.status(500).send("Area too big")
-        return
-    };*/
-    const bbox=info.latSw+","+info.lonSw+","+info.latNe+","+info.lonNe
-    const query = info.filter !== "skiing" ? `
-        [out:json];
-        nwr["sport"=${info.filter}](${bbox})["access"!="private"];
-        out geom;
-    `:`
+const apiKey = 'AIzaSyAEANncF4i3EqwlSfnRic_oOrpynSTVHIU';
+async function getPlaceDetails(placeId) {
+    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=website&key=${apiKey}`;
+    const response = await axios.get(detailsUrl);
+    return response.data.result.website || 'N|A';
+}
+function convertBBoxToGoogleFormat(bboxOverpass) {
+  const [south, west, north, east] = bboxOverpass.split(',').map(Number);
+  return `${south},${west}|${north},${east}`;
+}
+async function searchPlacesWithBoundsGoogle(bbox,filter) {
+    const sportQueries = {
+        athletics: "athletics track",
+        baseball: "baseball field",
+        basketball: "basketball court",
+        beachvolleyball: "beach volleyball court",
+        canoe: "canoe club",
+        climbing: "climbing gym",
+        cycling: "cycling path",
+        golf: "golf course",
+        gym: "fitness center",
+        hiking: "hiking trail",
+        ice_skating: "ice skating rink",
+        karting: "go-kart track",
+        padel: "padel court",
+        rugby: "rugby field",
+        running: "running track",
+        sailing: "sailing club",
+        scuba_diving: "scuba diving center",
+        skiing: "ski resort",
+        soccer: "soccer field",
+        surfing: "surf school",
+        swimming: "swimming pool",
+        table_tennis: "table tennis hall",
+        tennis: "tennis court",
+        volleyball: "volleyball court",
+        wakeboarding: "wakeboard park",
+        water_ski: "water ski center",
+        windsurfing: "windsurfing center"
+    };
+    const query = sportQueries[filter] || filter;
+    const bounds= convertBBoxToGoogleFormat(bbox)
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&bounds=${bounds}&key=${apiKey}`;
+    const response = await axios.get(url);
+    const results = response.data.results;
+    const places = await Promise.all(results.map(async place => {
+        const website = await getPlaceDetails(place.place_id);
+        return {
+            filter: filter,
+            name: place.name,
+            lat: place.geometry.location.lat,
+            lng: place.geometry.location.lng,
+            website: website,
+        };
+    }));
+    return(places);
+}
+async function searchPlacesWithBoundsOverpass(bbox,filter){
+    const query = filter === "skiing" ? `
         [out:json];
         nwr["route"="piste"](${bbox});
         out geom;
+    `:filter==="hiking" ? `
+        [out:json];
+        (
+        nwr["sport"="${filter}"](${bbox})["access"!="private"];
+        way["highway"="path"](${bbox})["access"!="private"];
+        way["highway"="footway"](${bbox})["access"!="private"];
+        );
+        out geom;
+    `:`
+        [out:json];
+        nwr["sport"=${filter}](${bbox})["access"!="private"];
+        out geom;
     `
-    const response = await axios.post('https://overpass-api.de/api/interpreter', query);
-    const markers = response.data.elements;
-    for (let item of markers) {
-        let x2 = 0, y2 = 0;
-        if (item.lat && item.lon) {
-            x2 = item.lat;
-            y2 = item.lon;
-        } else if (item.bounds) {
-            x2 = (item.bounds.maxlat + item.bounds.minlat) / 2;
-            y2 = (item.bounds.maxlon + item.bounds.minlon) / 2;
-        }
-        try {
-            const nominatimResponse = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${x2}&lon=${y2}`);
-            item.tags["name"] = item.tags.name || nominatimResponse.data.name || "Public";
-            item.tags["website"]=item.tags.website||nominatimResponse.data.website||`https://www.google.com/search?q=${item.tags["name"]} ${nominatimResponse.data.address.postcode} `
-        } catch (error) {
-            console.error("Errore con Nominatim:", error.message);
-            item.tags.name = "Public";
-        }
-    }
-    const response1 = await axios.get(`https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=${info.filter}`);
-    const contenuto = response1.data.query.search;
+    const response= await axios.post('https://overpass-api.de/api/interpreter', query).catch(error=>{
+        console.error("Errore con Overpass API:", error.message);
+        res.status(500).send("Error with Overpass API")
+        return
+    });
+    return response.data.elements
+}
+async function searchWikiHow(filter){
+    const response = await axios.get(`https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=${filter}`).catch(error=>{
+        console.error("Errore con WikiHow API:", error.message);
+        res.status(500).send("Error with WikiHow API")
+        return
+    })
+    const contenuto = response.data.query.search;
+    return contenuto;
+}
+async function searchPexelsImages(filter) {
     const API_KEY='FrbSqrAbcjqK5v7P5wsCQymKbGo6L655TmLSvMt329yAnyRCdTEiJIrI'
-    const response2=await axios.get('https://api.pexels.com/v1/search', {headers: {Authorization: API_KEY},params:{query: info.filter,per_page: 10}})
-    const response3=await axios.get('https://api.pexels.com/videos/search', {headers: {Authorization: API_KEY},params:{query: info.filter,per_page: 10}})
-    const response4=await searchGoogleShopping(info.filter);
-    const dato={
-        markers:markers,
-        contenuto:contenuto,
-        img:response2.data.photos,
-        video:response3.data.videos,
-        shopping:response4
-    }
-    res.send(dato)
-})
+    const response = await axios.get('https://api.pexels.com/v1/search', {headers: {Authorization: API_KEY},params:{query: filter,per_page: 10}}).catch(error=>{
+        console.error("Errore con Pexels API:", error.message);
+        res.status(500).send("Error with Pexels API")
+        return
+    })
+    return response.data.photos;
+}
+async function searchPexelsVideos(filter) {
+    const API_KEY='FrbSqrAbcjqK5v7P5wsCQymKbGo6L655TmLSvMt329yAnyRCdTEiJIrI'
+    const response = await axios.get('https://api.pexels.com/videos/search', {headers: {Authorization: API_KEY},params:{query: filter,per_page: 10}}).catch(error=>{
+        console.error("Errore con Pexels API:", error.message);
+        res.status(500).send("Error with Pexels API")
+        return
+    })
+    return response.data.videos;
+}
 async function searchGoogleShopping(query) {
     try {
         const url = `https://www.google.com/search?tbm=shop&hl=en&q=${encodeURIComponent(query)}`;
@@ -198,12 +245,70 @@ async function searchGoogleShopping(query) {
         });
         return (products);
     } catch (error) {
-        console.error("Errore durante lo scraping:", error.message);
+        return
     }
 }
-//get tutti centri sportivi da mettere sulla mappa
-app.get("/getSportCenter", async (req,res)=>{
-    client.db("palestra").collection("centriSportivo").find({}).toArray().then(e=>res.send(e))
+app.put("/getBounds", async (req,res)=>{
+    const info=req.body
+    if(!info.filter){
+        res.status(500).send("You have not entered the type of sport")
+        return
+    }
+    const bbox=info.latSw+","+info.lonSw+","+info.latNe+","+info.lonNe
+    //const markers=await searchPlacesWithBounds(bbox,info.filter)
+    const markers = await searchPlacesWithBoundsOverpass(bbox,info.filter)
+    for (let item of markers) {
+        let x2 = 0, y2 = 0;
+        if (item.lat && item.lon) {
+            x2 = item.lat;
+            y2 = item.lon;
+        } else if (item.bounds) {
+            x2 = (item.bounds.maxlat + item.bounds.minlat) / 2;
+            y2 = (item.bounds.maxlon + item.bounds.minlon) / 2;
+        }
+        try {
+            const nominatimResponse = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${x2}&lon=${y2}`).catch(error=>{
+                console.error("Errore con Nominatim:", error.message);
+                res.status(500).send("Error with Nominatim")
+                return
+            });
+            item.tags["name"] = item.tags.name || nominatimResponse.data.name || "Public";
+            item.tags["website"]=item.tags.website||nominatimResponse.data.website||`https://www.google.com/search?q=${item.tags["name"]} ${nominatimResponse.data.address.postcode} `
+        } catch (error) {
+            console.error("Errore con Nominatim:", error.message);
+            item.tags.name = "Public";
+        }
+    }
+    const contenuto = await searchWikiHow(info.filter);
+    const img=await searchPexelsImages(info.filter)
+    const video=await searchPexelsVideos(info.filter)
+    const shopping=await searchGoogleShopping(info.filter).catch(error=>{
+        console.error("Errore con Google Shopping:", error.message);
+        res.status(500).send("Error with Google Shopping")
+        return
+    });
+    const dato={
+        markers:markers,
+        contenuto:contenuto,
+        img:img,
+        video:video,
+        shopping:shopping
+    }
+    res.send(dato)
+})
+//richiedi informazioni su gli esercizi
+app.put("/getWikiHow", async (req,res)=>{
+    const info=req.body
+    if(!info.filter){
+        res.status(500).send("You have not entered the type of sport")
+        return
+    }
+    const contenuto = await searchWikiHow(info.filter);
+    if(!contenuto){
+        res.status(500).send("Error with WikiHow API")
+        return
+    }
+    res.send(contenuto)
 })
 //aggiungi centro sportivo sulla mappa
 app.post("/addMarker", async (req,res)=>{
