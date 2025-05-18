@@ -108,9 +108,23 @@ async function getPlaceDetails(placeId) {
     const response = await axios.get(detailsUrl);
     return response.data.result.website || 'N|A';
 }
-function convertBBoxToGoogleFormat(bboxOverpass) {
-  const [south, west, north, east] = bboxOverpass.split(',').map(Number);
-  return `${south},${west}|${north},${east}`;
+function getRadiusFromBBox(bbox) {
+  const [south, west, north, east] = bbox.split(',').map(Number);
+  // Distanza in gradi
+  const latDiff = Math.abs(north - south);
+  const lngDiff = Math.abs(east - west);
+  // Approssimazione: 1° latitudine ≈ 111 km
+  const latMeters = latDiff * 111000;
+  const lngMeters = lngDiff * 111000 * Math.cos(((south + north) / 2) * Math.PI / 180);
+  // Prendiamo la metà della diagonale
+  const diagonalMeters = Math.sqrt(latMeters**2 + lngMeters**2);
+  return diagonalMeters / 2;
+}
+function getCenterFromBBox(bbox) {
+  const [south, west, north, east] = bbox.split(',').map(Number);
+  const lat = (south + north) / 2;
+  const lng = (west + east) / 2;
+  return { lat, lng };
 }
 async function searchPlacesWithBoundsGoogle(bbox,filter) {
     const sportQueries = {
@@ -143,8 +157,9 @@ async function searchPlacesWithBoundsGoogle(bbox,filter) {
         windsurfing: "windsurfing center"
     };
     const query = sportQueries[filter] || filter;
-    const bounds= convertBBoxToGoogleFormat(bbox)
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&bounds=${bounds}&key=${apiKey}`;
+    const { lat, lng } = getCenterFromBBox(bbox);
+    const radius = getRadiusFromBBox(bbox);
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?keyword=${encodeURIComponent(query)}&location=${lat},${lng}&radius=${radius}&key=${apiKey}`;
     const response = await axios.get(url);
     const results = response.data.results;
     const places = await Promise.all(results.map(async place => {
@@ -255,7 +270,7 @@ app.put("/getBounds", async (req,res)=>{
         return
     }
     const bbox=info.latSw+","+info.lonSw+","+info.latNe+","+info.lonNe
-    //const markers=await searchPlacesWithBounds(bbox,info.filter)
+    const markers1=await searchPlacesWithBoundsGoogle(bbox,info.filter)
     const markers = await searchPlacesWithBoundsOverpass(bbox,info.filter)
     for (let item of markers) {
         let x2 = 0, y2 = 0;
@@ -289,6 +304,7 @@ app.put("/getBounds", async (req,res)=>{
     });
     const dato={
         markers:markers,
+        markers1:markers1,
         contenuto:contenuto,
         img:img,
         video:video,
