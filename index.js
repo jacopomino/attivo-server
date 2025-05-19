@@ -9,6 +9,7 @@ import {deleteFile,UploadcareSimpleAuthSchema} from '@uploadcare/rest-client';
 import nodemailer from "nodemailer"
 import axios from "axios"
 import * as cheerio from "cheerio";
+import sportQueriesJson from "./sportQueries.json" assert {type: "json"};
 
 
 const PORT = process.env.PORT|| 3001;
@@ -127,36 +128,10 @@ function getCenterFromBBox(bbox) {
   return { lat, lng };
 }
 async function searchPlacesWithBoundsGoogle(bbox,filter) {
-    const sportQueries = {
-        athletics: "athletics track",
-        baseball: "baseball field",
-        basketball: "basketball court",
-        beachvolleyball: "beach volleyball court",
-        canoe: "canoe club",
-        climbing: "climbing gym",
-        cycling: "cycling path",
-        golf: "golf course",
-        gym: "fitness center",
-        hiking: "hiking trail",
-        ice_skating: "ice skating rink",
-        karting: "go-kart track",
-        padel: "padel court",
-        rugby: "rugby field",
-        running: "running track",
-        sailing: "sailing club",
-        scuba_diving: "scuba diving center",
-        skiing: "ski resort",
-        soccer: "soccer field",
-        surfing: "surf school",
-        swimming: "swimming pool",
-        table_tennis: "table tennis hall",
-        tennis: "tennis court",
-        volleyball: "volleyball court",
-        wakeboarding: "wakeboard park",
-        water_ski: "water ski center",
-        windsurfing: "windsurfing center"
-    };
+    const sportQueries = sportQueriesJson
     const query = sportQueries[filter] || filter;
+    console.log(query);
+    
     const { lat, lng } = getCenterFromBBox(bbox);
     const radius = getRadiusFromBBox(bbox);
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?keyword=${encodeURIComponent(query)}&location=${lat},${lng}&radius=${radius}&key=${apiKey}`;
@@ -172,6 +147,8 @@ async function searchPlacesWithBoundsGoogle(bbox,filter) {
             website: website,
         };
     }));
+    console.log(places);
+    
     return(places);
 }
 async function searchPlacesWithBoundsOverpass(bbox,filter){
