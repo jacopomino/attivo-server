@@ -333,9 +333,17 @@ app.put("/getExercises", async (req,res)=>{
         res.status(500).send("You have not entered the body part")
         return
     }
-    const url="https://www.acefitness.org/resources/everyone/exercise-library/body-part/"+encodeURIComponent(bodyPart[0].toLowerCase())
-    const results = await fetchExerciseLinks(url);
-    res.send(results)
+    const exercises=[]
+    for(let i=0;i<bodyPart.length;i++){
+        let page=1
+        if(bodyPart[i].toLowerCase()!=="neck"){
+            page=Math.floor(Math.random() * 3)
+        }
+        const url="https://www.acefitness.org/resources/everyone/exercise-library/body-part/"+encodeURIComponent(bodyPart[i].toLowerCase()+"/?page="+page)
+        const result = await fetchExerciseLinks(url);
+        exercises.push({result,bodyPart:bodyPart[i]})
+    }
+    res.send(exercises)
 })
 //aggiungi centro sportivo sulla mappa
 app.post("/addMarker", async (req,res)=>{
