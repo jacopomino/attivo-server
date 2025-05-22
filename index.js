@@ -130,8 +130,6 @@ function getCenterFromBBox(bbox) {
 async function searchPlacesWithBoundsGoogle(bbox,filter) {
     const sportQueries = sportQueriesJson
     const query = sportQueries[filter] || filter;
-    console.log(query);
-    
     const { lat, lng } = getCenterFromBBox(bbox);
     const radius = getRadiusFromBBox(bbox);
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?keyword=${encodeURIComponent(query)}&location=${lat},${lng}&radius=${radius}&key=${apiKey}`;
@@ -147,8 +145,6 @@ async function searchPlacesWithBoundsGoogle(bbox,filter) {
             website: website,
         };
     }));
-    console.log(places);
-    
     return(places);
 }
 async function searchPlacesWithBoundsOverpass(bbox,filter){
@@ -302,6 +298,44 @@ app.put("/getWikiHow", async (req,res)=>{
         return
     }
     res.send(contenuto)
+})
+//scraping degli esercizi delle parti del corpo
+async function fetchExerciseLinks(url) {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    const cards = $('.exercise-card-grid__cell a').toArray();
+    const results = await Promise.all(cards.map(async (el) => {
+        const image = $(el).find('.exercise-card__image').attr('data-lazybg');
+        const href = 'https://www.acefitness.org' + $(el).attr('href');
+        const title = $(el).find('h2').text().trim();
+        const bodyPart = $(el).find('.exercise-info__term--body-part dd').text().trim();
+        const equipment = $(el).find('.exercise-info__term--equipment dd').text().trim();
+        const description = await fetchExerciseDescription(href);
+        return { image, title, url: href, bodyPart, equipment, description };
+    }));
+    return results;
+}
+
+async function fetchExerciseDescription(url) {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    const paragraphs=[]
+    $('.exercise-post__step-content').find('p').each((_, el) => {
+        const p=$(el).text().trim();
+        paragraphs.push(p);
+    })
+    return paragraphs
+}
+app.put("/getExercises", async (req,res)=>{
+    const info=req.body
+    const bodyPart=info["body_part[]"]
+    if(!bodyPart){
+        res.status(500).send("You have not entered the body part")
+        return
+    }
+    const url="https://www.acefitness.org/resources/everyone/exercise-library/body-part/"+encodeURIComponent(bodyPart[0].toLowerCase())
+    const results = await fetchExerciseLinks(url);
+    res.send(results)
 })
 //aggiungi centro sportivo sulla mappa
 app.post("/addMarker", async (req,res)=>{
