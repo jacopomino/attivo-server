@@ -285,6 +285,23 @@ app.put("/getBounds", async (req,res)=>{
     }
     res.send(dato)
 })
+app.put("/getShopping", async (req,res)=>{
+    const info=req.body
+    if(!info.filter){
+        res.status(500).send("You have not entered the type of sport")
+        return
+    }
+    const shopping=await searchGoogleShopping(info.filter).catch(error=>{
+        console.error("Errore con Google Shopping:", error.message);
+        res.status(500).send("Error with Google Shopping")
+        return
+    });
+    if(!shopping){
+        res.status(500).send("Error with Google Shopping API")
+        return
+    }
+    res.send(shopping)
+})
 //richiedi informazioni su gli esercizi
 app.put("/getWikiHow", async (req,res)=>{
     const info=req.body
