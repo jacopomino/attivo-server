@@ -104,10 +104,10 @@ app.put("/stayLoggedIn", async (req,res)=>{
 })
 //get tutti in centri sportivi visivamente sulla mappa
 const apiKey = 'AIzaSyAEANncF4i3EqwlSfnRic_oOrpynSTVHIU';
-async function getPlaceDetails(placeId) {
+async function getPlaceDetails(placeId,name) {
     const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=website&key=${apiKey}`;
     const response = await axios.get(detailsUrl);
-    return response.data.result.website || 'N|A';
+    return response.data.result.website || `https://www.google.com/search?q=${name}`;
 }
 function getRadiusFromBBox(bbox) {
   const [south, west, north, east] = bbox.split(',').map(Number);
@@ -136,13 +136,22 @@ async function searchPlacesWithBoundsGoogle(bbox,filter) {
     const response = await axios.get(url);
     const results = response.data.results;
     const places = await Promise.all(results.map(async place => {
-        const website = await getPlaceDetails(place.place_id);
+        const website = await getPlaceDetails(place.place_id, place.name)
         return {
             filter: filter,
             name: place.name,
             lat: place.geometry.location.lat,
             lng: place.geometry.location.lng,
             website: website,
+            rating: {
+                value: place.rating || 0,
+                count: place.user_ratings_total || 0
+            },
+            opening_hours: place.opening_hours ? {
+                open_now: place.opening_hours.open_now,
+                periods: place.opening_hours.periods || []
+            } : null,
+            photos: place.photos?place.photos[0].html_attributions:[]
         };
     }));
     return(places);
@@ -170,7 +179,7 @@ async function searchPlacesWithBoundsOverpass(bbox,filter){
         res.status(500).send("Error with Overpass API")
         return
     });
-    return response.data.elements
+    return response.data.elements.filter((item, index, self) =>index === self.findIndex(obj => obj.tags.name === item.tags.name));
 }
 async function searchWikiHow(filter){
     const response = await axios.get(`https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=${filter}`).catch(error=>{
@@ -201,17 +210,21 @@ async function searchPexelsVideos(filter) {
 }
 async function searchGoogleShopping(query) {
     try {
-        const url = `https://www.google.com/search?tbm=shop&hl=en&q=${encodeURIComponent(query)}`;
+        const url = `https://www.google.com/search?udm=28&hl=en&q=${encodeURIComponent(query)}`;
         const { data } = await axios.get(url, {
             headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
         });
         const $ = cheerio.load(data);
         let products = [];
-        $('.sh-dgr__content').each((index, element) => {
-            const title = $(element).find('.tAxDx').text().trim();
-            const price = $(element).find('.a8Pemb').text().trim().replace(/[^\d,.]/g, '').replace(',', '.');
+        $('li').each((index, element) => {
+            console.log(element.tagName);
+            
+            const title = $(element).find('.gkQHve').text().trim();
+            const price = $(element).find('.lmQWe').text().trim().replace(/[^\d,.]/g, '').replace(',', '.');
             const store = $(element).find('.aULzUe').text().trim() || "Unknown Store"
             const link = $(element).find('a').attr('href');
             let directLink = "N/A";
@@ -226,14 +239,15 @@ async function searchGoogleShopping(query) {
                     title,
                     price,
                     store: store,
-                    link: link ? `https://www.google.com${link}`: "N/A",
+                    link: link ? `https://www.google.com${link}` : "N/A",
                     directLink
                 });
             }
         });
-        return (products);
+        return products;
     } catch (error) {
-        return
+        console.error("Errore:", error.message);
+        return [];
     }
 }
 app.put("/getBounds", async (req,res)=>{
@@ -267,21 +281,9 @@ app.put("/getBounds", async (req,res)=>{
             item.tags.name = "Public";
         }
     }
-    const contenuto = await searchWikiHow(info.filter);
-    const img=await searchPexelsImages(info.filter)
-    const video=await searchPexelsVideos(info.filter)
-    const shopping=await searchGoogleShopping(info.filter).catch(error=>{
-        console.error("Errore con Google Shopping:", error.message);
-        res.status(500).send("Error with Google Shopping")
-        return
-    });
     const dato={
         markers:markers,
         markers1:markers1,
-        contenuto:contenuto,
-        img:img,
-        video:video,
-        shopping:shopping
     }
     res.send(dato)
 })
