@@ -165,8 +165,15 @@ async function searchPlacesWithBoundsOverpass(bbox,filter){
         [out:json];
         (
         nwr["sport"="${filter}"](${bbox})["access"!="private"];
-        way["highway"="path"](${bbox})["access"!="private"];
-        way["highway"="footway"](${bbox})["access"!="private"];
+        way["highway"="path"]["sac_scale"]["foot"="yes"]["name"](${bbox});
+        way["highway"="footway"]["sac_scale"]["foot"="yes"]["name"](${bbox});
+        );
+        out geom;
+    `:filter==="cycling" ? `
+        [out:json];
+        (
+        nwr["sport"="${filter}"](${bbox})["access"!="private"];
+        way["highway"="path"]["bicycle"="yes"]["name"](${bbox});
         );
         out geom;
     `:`
