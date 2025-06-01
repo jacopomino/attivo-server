@@ -10,6 +10,7 @@ import nodemailer from "nodemailer"
 import axios from "axios"
 import * as cheerio from "cheerio";
 import sportQueriesJson from "./sportQueries.json" assert {type: "json"};
+import stringSimilarity from "string-similarity";
 
 
 const PORT = process.env.PORT|| 3001;
@@ -186,7 +187,8 @@ async function searchPlacesWithBoundsOverpass(bbox,filter){
         res.status(500).send("Error with Overpass API")
         return
     });
-    return response.data.elements.filter((item, index, self) =>index === self.findIndex(obj => obj.tags.name === item.tags.name));
+    const responseWithoutDuplicates = response.data.elements.filter((item, index, self) =>index === self.findIndex(obj => obj.tags.name === item.tags.name));
+    return responseWithoutDuplicates
 }
 async function searchWikiHow(filter){
     const response = await axios.get(`https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=${filter}`).catch(error=>{
@@ -257,6 +259,15 @@ async function searchGoogleShopping(query) {
         return [];
     }
 }
+const removeDuplicateMarkers = (markers,markers1) => {
+    markers1.forEach((m, index) => {
+        const duplicateIndex = markers.findIndex(marker=>(m.name.toLowerCase()===marker.tags.name.toLowerCase())||(stringSimilarity.compareTwoStrings(m.name.toLowerCase().trim(),marker.tags.name.toLowerCase().trim())>0.8));
+        if (duplicateIndex !== -1) {
+            markers1.splice(index, 1);
+        }
+    })
+    return markers1
+}
 app.put("/getBounds", async (req,res)=>{
     const info=req.body
     if(!info.filter){
@@ -264,8 +275,9 @@ app.put("/getBounds", async (req,res)=>{
         return
     }
     const bbox=info.latSw+","+info.lonSw+","+info.latNe+","+info.lonNe
-    const markers1=await searchPlacesWithBoundsGoogle(bbox,info.filter)
-    const markers = await searchPlacesWithBoundsOverpass(bbox,info.filter)
+    let markers1=await searchPlacesWithBoundsGoogle(bbox,info.filter)
+    const markers=await searchPlacesWithBoundsOverpass(bbox,info.filter)
+    markers1=removeDuplicateMarkers(markers,markers1)
     for (let item of markers) {
         let x2 = 0, y2 = 0;
         if (item.lat && item.lon) {
@@ -384,7 +396,7 @@ app.post("/addMarker", async (req,res)=>{
             rejectUnauthorized:false
         }
     });
-    const text="<div><p>Coordinates: "+info.lat+", "+info.lon+"</p><p>Sport: "+info.sport+"</p></div>"
+    const text="<div><p>Coordinates: "+info.lat+", "+info.lon+"</p><p>Sport: "+info.sport+"</p><p>Name: "+info.name+"</p></div>"
     const opzioniEmail={
         from:'nolomundus@gmail.com', // Inserisci il mittente
         to:'nolomundus@gmail.com', // Inserisci il destinatario
