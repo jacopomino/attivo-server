@@ -139,6 +139,7 @@ async function searchPlacesWithBoundsGoogle(bbox,filter) {
     const places = await Promise.all(results.map(async place => {
         const website = await getPlaceDetails(place.place_id, place.name)
         return {
+            id: place.place_id,
             filter: filter,
             name: place.name,
             lat: place.geometry.location.lat,
@@ -261,7 +262,7 @@ async function searchGoogleShopping(query) {
 }
 const removeDuplicateMarkers = (markers,markers1) => {
     markers1.forEach((m, index) => {
-        const duplicateIndex = markers.findIndex(marker=>(m.name.toLowerCase()===marker.tags.name.toLowerCase())||(stringSimilarity.compareTwoStrings(m.name.toLowerCase().trim(),marker.tags.name.toLowerCase().trim())>0.8));
+        const duplicateIndex = markers.findIndex(marker=>marker.tags.name&&((m.name.toLowerCase()===marker.tags.name.toLowerCase())||(stringSimilarity.compareTwoStrings(m.name.toLowerCase().trim(),marker.tags.name.toLowerCase().trim())>0.8)));
         if (duplicateIndex !== -1) {
             markers1.splice(index, 1);
         }
@@ -277,7 +278,9 @@ app.put("/getBounds", async (req,res)=>{
     const bbox=info.latSw+","+info.lonSw+","+info.latNe+","+info.lonNe
     let markers1=await searchPlacesWithBoundsGoogle(bbox,info.filter)
     const markers=await searchPlacesWithBoundsOverpass(bbox,info.filter)
-    markers1=removeDuplicateMarkers(markers,markers1)
+    if(markers1.length>0&&markers.length>0){
+        markers1=removeDuplicateMarkers(markers,markers1)
+    }
     for (let item of markers) {
         let x2 = 0, y2 = 0;
         if (item.lat && item.lon) {
@@ -396,7 +399,7 @@ app.post("/addMarker", async (req,res)=>{
             rejectUnauthorized:false
         }
     });
-    const text="<div><p>Coordinates: "+info.lat+", "+info.lon+"</p><p>Sport: "+info.sport+"</p><p>Name: "+info.name+"</p></div>"
+    const text="<div><p>Coordinates: "+info.lat+", "+info.lon+"</p><p>Sport: "+info.sport+"</p><p>Name: "+info.name+"</p><p>User: "+info.utente._id+"</p></div>"
     const opzioniEmail={
         from:'nolomundus@gmail.com', // Inserisci il mittente
         to:'nolomundus@gmail.com', // Inserisci il destinatario
