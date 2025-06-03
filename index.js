@@ -218,48 +218,6 @@ async function searchPexelsVideos(filter) {
     })
     return response.data.videos;
 }
-async function searchGoogleShopping(query) {
-    try {
-        const url = `https://www.google.com/search?udm=28&hl=en&q=${encodeURIComponent(query)}`;
-        const { data } = await axios.get(url, {
-            headers: {
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-            },
-        });
-        const $ = cheerio.load(data);
-        let products = [];
-        $('li').each((index, element) => {
-            console.log(element.tagName);
-            
-            const title = $(element).find('.gkQHve').text().trim();
-            const price = $(element).find('.lmQWe').text().trim().replace(/[^\d,.]/g, '').replace(',', '.');
-            const store = $(element).find('.aULzUe').text().trim() || "Unknown Store"
-            const link = $(element).find('a').attr('href');
-            let directLink = "N/A";
-            $(element).find('a').each((i, el) => {
-                const href = $(el).attr('href');
-                if (href && href.includes('url=')) {
-                    directLink = decodeURIComponent(href.split('url=')[1].split('&')[0]);
-                }
-            });
-            if (title && price) {
-                products.push({
-                    title,
-                    price,
-                    store: store,
-                    link: link ? `https://www.google.com${link}` : "N/A",
-                    directLink
-                });
-            }
-        });
-        return products;
-    } catch (error) {
-        console.error("Errore:", error.message);
-        return [];
-    }
-}
 const removeDuplicateMarkers = (markers,markers1) => {
     markers1.forEach((m, index) => {
         const duplicateIndex = markers.findIndex(marker=>marker.tags.name&&((m.name.toLowerCase()===marker.tags.name.toLowerCase())||(stringSimilarity.compareTwoStrings(m.name.toLowerCase().trim(),marker.tags.name.toLowerCase().trim())>0.8)));
@@ -309,13 +267,53 @@ app.put("/getBounds", async (req,res)=>{
     }
     res.send(dato)
 })
-app.put("/getShopping", async (req,res)=>{
-    const info=req.body
-    if(!info.filter){
+async function searchGoogleShopping(query) {
+    try {
+        const url = `https://www.google.com/search?tbm=shop&&hl=en&q=${encodeURIComponent(query)}`;
+        const { data } = await axios.get(url, {
+            headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+        });
+        const $ = cheerio.load(data);
+        let products = [];
+        $('li').each((index, element) => {
+            const title = $(element).find('.gkQHve').text().trim();
+            const price = $(element).find('.lmQWe').text().trim().replace(/[^\d,.]/g, '').replace(',', '.');
+            const store = $(element).find('.aULzUe').text().trim() || "Unknown Store"
+            const link = $(element).find('a').attr('href');
+            let directLink = "N/A";
+            $(element).find('a').each((i, el) => {
+                const href = $(el).attr('href');
+                if (href && href.includes('url=')) {
+                    directLink = decodeURIComponent(href.split('url=')[1].split('&')[0]);
+                }
+            });
+            if (title && price) {
+                products.push({
+                    title,
+                    price,
+                    store: store,
+                    link: link ? `https://www.google.com${link}` : "N/A",
+                    directLink
+                });
+            }
+        });
+        return products;
+    } catch (error) {
+        console.error("Errore:", error.message);
+        return [];
+    }
+}
+app.get("/getShopping/:filter", async (req,res)=>{
+    const filter=req.params.filter
+    if(!filter){
         res.status(500).send("You have not entered the type of sport")
         return
     }
-    const shopping=await searchGoogleShopping(info.filter).catch(error=>{
+    const shopping=await searchGoogleShopping(filter).catch(error=>{
         console.error("Errore con Google Shopping:", error.message);
         res.status(500).send("Error with Google Shopping")
         return
@@ -399,11 +397,11 @@ app.post("/addMarker", async (req,res)=>{
             rejectUnauthorized:false
         }
     });
-    const text="<div><p>Coordinates: "+info.lat+", "+info.lon+"</p><p>Sport: "+info.sport+"</p><p>Name: "+info.name+"</p><p>User: "+info.utente._id+"</p></div>"
+    const text="<div><p>User: "+info["utente[_id]"]+"</p><p>Coordinates: "+info.lat+", "+info.lon+"</p><p>Sport: "+info.sport+"</p><p>Name: "+info.name+"</p></div>"
     const opzioniEmail={
         from:'nolomundus@gmail.com', // Inserisci il mittente
         to:'nolomundus@gmail.com', // Inserisci il destinatario
-        subject:"Add Marker",
+        subject:"Add Marker Request by "+info["utente[_id]"],
         html:text // Testo del messaggio
     };
     trasportatore.sendMail(opzioniEmail, function(error, info){
