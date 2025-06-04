@@ -103,6 +103,20 @@ app.put("/stayLoggedIn", async (req,res)=>{
         }
     })
 })
+//cerca video in pexels
+async function searchPexelsVideos(filter) {
+    const response = await axios.get('https://api.pexels.com/videos/search', {headers: {Authorization: API_KEY},params:{query: filter,per_page: 10}}).catch(error=>{
+        console.error("Errore con Pexels API:", error.message);
+        res.status(500).send("Error with Pexels API")
+        return
+    })
+    return response.data.videos;
+}
+app.put("/videoSport", async (req,res)=>{
+    let info=req.body
+    const videos=await searchPexelsVideos(info.filter)
+    return videos
+})
 //get tutti in centri sportivi visivamente sulla mappa
 const apiKey = 'AIzaSyAEANncF4i3EqwlSfnRic_oOrpynSTVHIU';
 async function getPlaceDetails(placeId,name) {
@@ -191,14 +205,14 @@ async function searchPlacesWithBoundsOverpass(bbox,filter){
     const responseWithoutDuplicates = response.data.elements.filter((item, index, self) =>index === self.findIndex(obj => obj.tags.name === item.tags.name));
     return responseWithoutDuplicates
 }
-async function searchWikiHow(filter){
-    const response = await axios.get(`https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=${filter}`).catch(error=>{
-        console.error("Errore con WikiHow API:", error.message);
-        res.status(500).send("Error with WikiHow API")
-        return
+const removeDuplicateMarkers = (markers,markers1) => {
+    markers1.forEach((m, index) => {
+        const duplicateIndex = markers.findIndex(marker=>marker.tags.name&&((m.name.toLowerCase()===marker.tags.name.toLowerCase())||(stringSimilarity.compareTwoStrings(m.name.toLowerCase().trim(),marker.tags.name.toLowerCase().trim())>0.8)));
+        if (duplicateIndex !== -1) {
+            markers1.splice(index, 1);
+        }
     })
-    const contenuto = response.data.query.search;
-    return contenuto;
+    return markers1
 }
 async function searchPexelsImages(filter) {
     const API_KEY='FrbSqrAbcjqK5v7P5wsCQymKbGo6L655TmLSvMt329yAnyRCdTEiJIrI'
@@ -209,32 +223,15 @@ async function searchPexelsImages(filter) {
     })
     return response.data.photos;
 }
-async function searchPexelsVideos(filter) {
-    const API_KEY='FrbSqrAbcjqK5v7P5wsCQymKbGo6L655TmLSvMt329yAnyRCdTEiJIrI'
-    const response = await axios.get('https://api.pexels.com/videos/search', {headers: {Authorization: API_KEY},params:{query: filter,per_page: 10}}).catch(error=>{
-        console.error("Errore con Pexels API:", error.message);
-        res.status(500).send("Error with Pexels API")
-        return
-    })
-    return response.data.videos;
-}
-const removeDuplicateMarkers = (markers,markers1) => {
-    markers1.forEach((m, index) => {
-        const duplicateIndex = markers.findIndex(marker=>marker.tags.name&&((m.name.toLowerCase()===marker.tags.name.toLowerCase())||(stringSimilarity.compareTwoStrings(m.name.toLowerCase().trim(),marker.tags.name.toLowerCase().trim())>0.8)));
-        if (duplicateIndex !== -1) {
-            markers1.splice(index, 1);
-        }
-    })
-    return markers1
-}
 app.put("/getBounds", async (req,res)=>{
     const info=req.body
     if(!info.filter){
         res.status(500).send("You have not entered the type of sport")
         return
     }
+    const photos=await searchPexelsImages(info.filter)
     const bbox=info.latSw+","+info.lonSw+","+info.latNe+","+info.lonNe
-    let markers1=await searchPlacesWithBoundsGoogle(bbox,info.filter)
+    let markers1=[]//await searchPlacesWithBoundsGoogle(bbox,info.filter)
     const markers=await searchPlacesWithBoundsOverpass(bbox,info.filter)
     if(markers1.length>0&&markers.length>0){
         markers1=removeDuplicateMarkers(markers,markers1)
@@ -264,6 +261,7 @@ app.put("/getBounds", async (req,res)=>{
     const dato={
         markers:markers,
         markers1:markers1,
+        photos:photos,
     }
     res.send(dato)
 })
@@ -325,6 +323,15 @@ app.get("/getShopping/:filter", async (req,res)=>{
     res.send(shopping)
 })
 //richiedi informazioni su gli esercizi
+async function searchWikiHow(filter){
+    const response = await axios.get(`https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=${filter}`).catch(error=>{
+        console.error("Errore con WikiHow API:", error.message);
+        res.status(500).send("Error with WikiHow API")
+        return
+    })
+    const contenuto = response.data.query.search;
+    return contenuto;
+}
 app.put("/getWikiHow", async (req,res)=>{
     const info=req.body
     if(!info.filter){
