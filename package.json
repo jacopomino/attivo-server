@@ -27,5 +27,8 @@
     "pexels": "^1.4.0",
     "puppeteer": "^24.4.0",
     "string-similarity": "^4.0.4"
+  },
+  "engines": {
+    "node": ">=20.18.1"
   }
 }
