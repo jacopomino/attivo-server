@@ -270,43 +270,7 @@ app.put("/getBounds", async (req,res)=>{
     res.send(dato)
 })
 async function searchGoogleShopping(query) {
-    try {
-        const url = `https://www.google.com/search?tbm=shop&&hl=en&q=${encodeURIComponent(query)}`;
-        const { data } = await axios.get(url, {
-            headers: {
-                'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-            },
-        });
-        const $ = cheerio.load(data);
-        let products = [];
-        $('li').each((index, element) => {
-            const title = $(element).find('.gkQHve').text().trim();
-            const price = $(element).find('.lmQWe').text().trim().replace(/[^\d,.]/g, '').replace(',', '.');
-            const store = $(element).find('.aULzUe').text().trim() || "Unknown Store"
-            const link = $(element).find('a').attr('href');
-            let directLink = "N/A";
-            $(element).find('a').each((i, el) => {
-                const href = $(el).attr('href');
-                if (href && href.includes('url=')) {
-                    directLink = decodeURIComponent(href.split('url=')[1].split('&')[0]);
-                }
-            });
-            if (title && price) {
-                products.push({
-                    title,
-                    price,
-                    store: store,
-                    link: link ? `https://www.google.com${link}` : "N/A",
-                    directLink
-                });
-            }
-        });
-        return products;
-    } catch (error) {
-        console.error("Errore:", error.message);
-        return [];
-    }
+    return query
 }
 app.get("/getShopping/:filter", async (req,res)=>{
     const filter=req.params.filter
