@@ -37,6 +37,10 @@ app.put("/signup", async (req,res)=>{
         countError++
         error=error+"password, "
     }
+    if(info.nome===""){
+        countError++
+        error=error+"name, "
+    }
     if(info.eta===""){
         countError++
         error=error+"age, "
@@ -45,9 +49,9 @@ app.put("/signup", async (req,res)=>{
         countError++
         error=error+"gender, "
     }
-    if(info.impianto===""){
+    if(info.sport_preferito===""){
         countError++
-        error=error+"sports facilitie, "
+        error=error+"favourite sport, "
     }
     if(countError>0){
         res.status(500).send(error)
@@ -56,8 +60,8 @@ app.put("/signup", async (req,res)=>{
         client.db("palestra").collection("users").findOne({password:info.password,email:info.email}).then(e=>{
             if(!e){
                 info["_id"]=new ObjectId()
-                info.altezza=[info.altezza]
-                info.peso=[info.peso]
+                info.peso=60
+                info.altezza=1.75
                 client.db("palestra").collection("users").insertOne(info).then((e)=>{
                     res.status(200).send(JSON.stringify(info["_id"]))
                 })
@@ -202,7 +206,7 @@ async function searchPlacesWithBoundsOverpass(bbox,filter){
         res.status(500).send("Error with Overpass API")
         return
     });
-    const responseWithoutDuplicates = response.data.elements.filter((item, index, self) =>index === self.findIndex(obj => obj.tags.name === item.tags.name));
+    const responseWithoutDuplicates = response.data.elements.filter((item, index, self) =>index === self.findIndex(obj => obj.tags.name.toLowerCase() === item.tags.name.toLowerCase()));
     return responseWithoutDuplicates
 }
 const removeDuplicateMarkers = (markers,markers1) => {
@@ -270,8 +274,7 @@ async function searchGoogleShopping(query) {
         const url = `https://www.google.com/search?tbm=shop&&hl=en&q=${encodeURIComponent(query)}`;
         const { data } = await axios.get(url, {
             headers: {
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9',
             },
         });
@@ -321,29 +324,6 @@ app.get("/getShopping/:filter", async (req,res)=>{
         return
     }
     res.send(shopping)
-})
-//richiedi informazioni su gli esercizi
-async function searchWikiHow(filter){
-    const response = await axios.get(`https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=${filter}`).catch(error=>{
-        console.error("Errore con WikiHow API:", error.message);
-        res.status(500).send("Error with WikiHow API")
-        return
-    })
-    const contenuto = response.data.query.search;
-    return contenuto;
-}
-app.put("/getWikiHow", async (req,res)=>{
-    const info=req.body
-    if(!info.filter){
-        res.status(500).send("You have not entered the type of sport")
-        return
-    }
-    const contenuto = await searchWikiHow(info.filter);
-    if(!contenuto){
-        res.status(500).send("Error with WikiHow API")
-        return
-    }
-    res.send(contenuto)
 })
 //scraping degli esercizi delle parti del corpo
 async function fetchExerciseLinks(url) {
@@ -502,19 +482,23 @@ app.post("/update", async (req,res)=>{
     let info=req.body
     client.db("palestra").collection("users").findOne({_id:new ObjectId(info.id)}).then(e=>{
         if(e){
-            if(e.impianto===info.impianto&&e.sesso===info.sesso){
-                res.status(500).send("Non hai modificato nessun parametro")
-            }else{
-                if(e.sesso!==info.sesso){
-                    client.db("palestra").collection("users").updateOne({_id:new ObjectId(info.id)},{$set:{sesso:info.sesso}})
-                }
-                if(e.impianto!==info.impianto){
-                    client.db("palestra").collection("users").updateOne({_id:new ObjectId(info.id)},{$set:{impianto:info.impianto}})
-                }
-                res.send("ok")
-            }
+            const elementToUpdate = info.idModificareKey;
+            const valueToUpdate = info.idModificareValue;
+            client.db("palestra").collection("users").updateOne({_id:new ObjectId(info.id)},{$set:{[elementToUpdate]:valueToUpdate}})
+            res.send("ok");   
         }else{
             res.status(500).send("User does not exist, Register!")
+        }
+    })
+})
+//delete users
+app.post("/delete", async (req,res)=>{
+    let info=req.body
+    client.db("palestra").collection("users").deleteOne({_id:new ObjectId(info.id)}).then(e=>{
+        if(e.deletedCount>0){
+            res.send("ok");   
+        }else{
+            res.status(500).send("User does not exist")
         }
     })
 })
