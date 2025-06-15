@@ -9,7 +9,7 @@ import {deleteFile,UploadcareSimpleAuthSchema} from '@uploadcare/rest-client';
 import nodemailer from "nodemailer"
 import axios from "axios"
 import * as cheerio from "cheerio";
-import sportQueriesJson from "./sportQueries.json" assert {type: "json"};
+import fs from 'fs'
 import stringSimilarity from "string-similarity";
 
 
@@ -147,7 +147,8 @@ function getCenterFromBBox(bbox) {
   return { lat, lng };
 }
 async function searchPlacesWithBoundsGoogle(bbox,filter) {
-    const sportQueries = sportQueriesJson
+    const sportQueriesPath = './sportQueries.json';
+    const sportQueries =JSON.parse(fs.readFileSync(sportQueriesPath, 'utf8'));
     const query = sportQueries[filter] || filter;
     const { lat, lng } = getCenterFromBBox(bbox);
     const radius = getRadiusFromBBox(bbox);
@@ -270,7 +271,7 @@ app.put("/getBounds", async (req,res)=>{
     res.send(dato)
 })
 async function searchGoogleShopping(query) {
-    return query
+    return "ok"
 }
 app.get("/getShopping/:filter", async (req,res)=>{
     const filter=req.params.filter
